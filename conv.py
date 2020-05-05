@@ -49,7 +49,7 @@ class IConv(MessagePassing):
         self.cached = cached
         self.normalize = normalize
 
-        self.weight = Parameter(torch.Tensor(in_channels, out_channels))
+        self.weight = Parameter(torch.eye(in_channels), requires_grad=False)
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))

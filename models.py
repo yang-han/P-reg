@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATConv, GCNConv, SGConv
 from torch_geometric.nn.inits import glorot, zeros
 
-
+from conv import IConv
 
 class ADGCN(torch.nn.Module):
     def __init__(self, num_features, num_classes):
@@ -18,6 +18,16 @@ class ADGCN(torch.nn.Module):
         return self.conv(x, edge_index)
 
 
+class IADGCN(torch.nn.Module):
+    def __init__(self, num_features, num_classes):
+        super(IADGCN, self).__init__()
+        self.m1 = GCN(num_features, num_classes)
+        self.conv = IConv(num_classes, num_classes, cached=True)
+        # self.mu = nn.Parameter(torch.ones(1)* 0.2, requires_grad=False)
+        
+    def forward(self, x, edge_index):
+        x = self.m1(x, edge_index)
+        return self.conv(x, edge_index)
 
 
 class GCN(torch.nn.Module):

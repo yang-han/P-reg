@@ -11,14 +11,14 @@ from torch_geometric.datasets import Planetoid
 import torch_geometric.transforms as T
 import torch.nn.functional as F
 
-from models import GCN, GAT, ADGCN
+from models import GCN, GAT, ADGCN, IADGCN
 
 # from utils import train, test
 
 
 def create_parser():
     parser = argparse.ArgumentParser(description="train many times.")
-    parser.add_argument("--dataset", type=str, default="cora")
+    parser.add_argument("--dataset", type=str, default="citeseer")
     parser.add_argument("--model", type=str, default="ADGCN")
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--num-seeds", type=int, default=10)
@@ -39,7 +39,7 @@ def train(model, optimizer, data, edge_index, train_mask):
     #     F.softmax(model(data.x, edge_index), dim=1), F.softmax(output_1, dim=1)
     # )
     # mu = 0
-    mu = 0.001  # cora citeseer
+    mu = 0.01  # cora citeseer
     # mu = 0.045 # pubmed adgcn
     # mu = 0.05
     # print(loss_1.item(), loss_2.item(), end=' | ')
@@ -111,7 +111,7 @@ for seed in seeds:
     torch.manual_seed(seed)
     model = model_cls(dataset.num_features, dataset.num_classes).to(device)
     data = data.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
     best_val_acc = test_acc = 0
     best_val_acc_2 = test_acc_2 = 0
