@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
 from torch_geometric.datasets import Amazon, Coauthor, Planetoid, CoraFull
+import json
 
 ALL_DATASETS = [
     "cora",
@@ -113,6 +114,9 @@ def load_data(filename):
         data = pickle.load(f)
     return data
 
+def load_json(f_path):
+    with open(f_path, 'r') as f:
+        return json.load(f)
 
 def train(model, optimizer, data, edge_index, train_mask):
     model.train()
@@ -369,4 +373,12 @@ def _combine_edges_2(
     if p_c != num_compensate_edges:
         print("!!!!! p_c != num_compensate_edges", p_c, num_compensate_edges, end=" ")
     return adj_bool.nonzero().t()
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Unsupported value encountered.')
 
