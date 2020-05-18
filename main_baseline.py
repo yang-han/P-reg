@@ -7,41 +7,67 @@ import argparse
 import torch
 import torch_geometric.transforms as T
 import torch.nn.functional as F
+import torch.nn as nn
 
 from models import GCN, GAT, SGC
 
 #path_json = "~/gnn/ADGCN/config"
 path_json=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config')
 
+class LabelSmoothingLoss(nn.Module):
+    def __init__(self, classes, smoothing=0.0, dim=-1):
+        super(LabelSmoothingLoss, self).__init__()
+        self.confidence = 1.0 - smoothing
+        self.smoothing = smoothing
+        self.cls = classes
+        self.dim = dim
+
+    def forward(self, pred, target):
+        # target is a scalar
+        pred = pred.log_softmax(dim=self.dim)
+        with torch.no_grad():
+            # true_dist = pred.data.clone()
+            true_dist = torch.zeros_like(pred)
+            true_dist.fill_(self.smoothing / (self.cls - 1))
+            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
+        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
+
 def create_parser():
     parser = argparse.ArgumentParser(description="train many times.")
     parser.add_argument("--dataset", type=str, default="citeseer")
-    parser.add_argument("--model", type=str, default="ADGCN")
+    parser.add_argument("--model", type=str, default="GCN")
     parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--regularizer", type=float, default=0.)
+    parser.add_argument("--epochs", type=int, default=10000)
+    parser.add_argument("--num_seeds", type=int, default=3)
+    parser.add_argument("--num_splits", type=int, default=3)
+    parser.add_argument("--patience", type=int, default=100)
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--weight_decay", type=float, default=0.)
+    parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--verbose", "-v", action="store_true")
     return parser
 
-def loss_(model, data, mask):
-    output_1 = F.softmax(model(data.x, data.edge_index), dim=1)
-    loss = F.nll_loss(torch.log(output_1[mask]), data.y[mask])
+def loss_(model, data, mask, reg_loss_):
+    logit = model(data.x, data.edge_index)
+    #loss = F.nll_loss(torch.log_softmax(logit[mask], dim=-1), data.y[mask])
+    reg_loss = reg_loss_(logit[mask], data.y[mask])
+    return reg_loss
 
-    return loss
-
-def train(model, optimizer, data, splits):
+def train(model, optimizer, data, splits, reg_loss_):
     train_mask = splits[0].to(data.x.device)
     model.train()
     optimizer.zero_grad()
-    loss = loss_(model, data, train_mask)
+    loss = loss_(model, data, train_mask, reg_loss_)
 
     loss.backward()
     optimizer.step()
 
-def val_loss_fn(model, data, splits):
+def val_loss_fn(model, data, splits, reg_loss_):
     model.eval()
     val_mask = splits[1].to(data.x.device)
-    val_loss = loss_(model, data, val_mask)
+    val_loss = loss_(model, data, val_mask, reg_loss_)
     return val_loss
-
 
 def test(model, data, splits):
     train_mask = splits[0].to(data.x.device)
@@ -63,17 +89,13 @@ def run():
     dataset = args.dataset
     device = args.gpu
 
-    config_path = os.path.join(path_json, args.model.lower()+".json")
-    config_json = load_json(config_path)
-
-    config = config_json[dataset]
-    epochs = config["epochs"]
-    num_seeds = config["num_seeds"]
-    patience = config["patience"]
-    lr = config["lr"]
-    weight_decay = config["weight_decay"]
-    num_splits = config["num_splits"]
-
+    epochs = args.epochs
+    num_seeds = args.num_seeds
+    patience = args.patience
+    lr = args.lr
+    weight_decay = args.weight_decay
+    num_splits = args.num_splits
+    hidden_size = args.hidden_size
     model_cls = globals()[args.model.upper()]
 
     seeds = list(range(num_seeds))
@@ -83,6 +105,9 @@ def run():
 
     result = np.zeros((4, num_seeds, num_splits))
 
+    assert 0. <= args.regularizer < 1.
+    reg_loss_ = LabelSmoothingLoss(dataset.num_classes, smoothing=args.regularizer)
+
     path_split = "/home/han/.datasets/splits"
 
     # For each split
@@ -91,7 +116,7 @@ def run():
         # In each split, run seeds times
         for seed in seeds:
             torch.manual_seed(seed)
-            model = model_cls(dataset.num_features, dataset.num_classes).to(device)
+            model = model_cls(dataset.num_features, dataset.num_classes, hidden_channels=hidden_size).to(device)
             data = data.to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -103,16 +128,16 @@ def run():
 
             for epoch in range(epochs):
 
-                train(model, optimizer, data, splits)
+                train(model, optimizer, data, splits, reg_loss_)
                 train_acc, val_acc, tmp_test_acc = test(
                     model, data, splits
                 )
 
                 # cal val_loss
-                val_loss = val_loss_fn(model, data, splits)
+                val_loss = val_loss_fn(model, data, splits, reg_loss_)
 
-                #if val_acc > best_val_acc:
-                if val_loss < best_val_loss:
+                if val_acc > best_val_acc:
+                #if val_loss < best_val_loss:
                     train_acc_best_val = train_acc
                     best_val_acc = val_acc
                     test_acc = tmp_test_acc
@@ -121,9 +146,9 @@ def run():
                 else:
                     cnt_wait += 1
 
-                log = "Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}"
+                log = "Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}, Val_loss: {: .4f}"
                 if args.verbose:
-                    print(log.format(epoch + 1, train_acc, best_val_acc, test_acc))
+                    print(log.format(epoch + 1, train_acc, best_val_acc, test_acc, val_loss))
 
                 if cnt_wait > patience:
                     break
@@ -136,13 +161,14 @@ def run():
 
     path=os.path.join(os.path.dirname(os.path.abspath(__file__)))
     if args.verbose:
-        data_avr = np.mean(result, axis=(2,3))
-        log1 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
-        log2 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(intermediate layer)"
-        print(log1.format(dataset, int(data_avr[0][3]), data_avr[0][0], data_avr[0][1], data_avr[0][2]))
-        print(log2.format(dataset, int(data_avr[1][3]), data_avr[1][0], data_avr[1][1], data_avr[1][2]))
+        data_avr = np.mean(result, axis=(1,2))
+        log = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
+        print(log.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
     else:
-        para = str(lr)+'_'+str(weight_decay)+'_'+str(patience)
+        data_avr = np.mean(result, axis=(1,2))
+        log = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
+        print(log.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
+        para = str(lr)+'_'+str(weight_decay)+'_'+str(patience)+'_'+str(args.regularizer)
         outfile = args.dataset+'_'+para+'.npy'
         with open(os.path.join(path, "result", args.model.lower(), outfile), 'wb') as f:
             np.save(f, result)
