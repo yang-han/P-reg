@@ -1,11 +1,12 @@
+import argparse
+import json
 import os
 import pickle
 
 import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
-from torch_geometric.datasets import Amazon, Coauthor, Planetoid, CoraFull
-import json
+from torch_geometric.datasets import Amazon, Coauthor, CoraFull, Planetoid
 
 ALL_DATASETS = [
     "cora",
@@ -53,7 +54,6 @@ def load_dataset(dataset, transform=None):
         print("Dataset not supported!")
         assert False
     return dataset
-
 
 
 def generate_percent_split(dataset, seed, train_percent=70, val_percent=20):
@@ -114,9 +114,11 @@ def load_data(filename):
         data = pickle.load(f)
     return data
 
+
 def load_json(f_path):
-    with open(f_path, 'r') as f:
+    with open(f_path, "r") as f:
         return json.load(f)
+
 
 def train(model, optimizer, data, edge_index, train_mask):
     model.train()
@@ -137,248 +139,14 @@ def test(model, data, edge_index, train_mask, val_mask, test_mask):
     return accs
 
 
-def prune(edge_index, y, threshold):
-    # print("pruning..")
-    row, col = edge_index
-    y_r, y_c = y[row], y[col]
-    dot_sim = torch.bmm(
-        y_r.view(y_r.size(0), 1, y_r.size(1)), y_c.view(y_c.size(0), y_c.size(1), 1)
-    ).view(edge_index.size(1))
-    # print("done")
-    return edge_index[:, dot_sim >= threshold]
-
-
-class ProactiveEdges:
-    def __init__(self, y, edges, device, normalization=False):
-        self.y = y.detach()
-        self.num_nodes = self.y.size(0)
-        self.edges = edges
-        self.normalization = normalization
-        self.device = device
-        self._cal_sim_m()  # get sim_m adj_bool_m adj_2_bool_m
-
-    def _cal_sim_m(self):
-        y = self.y
-        adj_m = get_adj_m(self.edges, self.y.size(0), dtype=torch.uint8)
-        self.adj_bool_m = adj_m > 0
-        # adj_m = adj_m.to(self.device, torch.float16)
-        # self.adj_2_bool_m = (torch.matmul(adj_m, adj_m) > 0).to("cpu")
-        del adj_m
-        norm = y.norm(p=2, dim=1)
-        y = (y.t() / norm).t()
-        if self.normalization:
-            self.y = y
-        self.sim_m = torch.matmul(y, y.t())
-        flatten_sim = self.sim_m.flatten().topk(self.edges.size(1) * 4)
-        self.f_sim_indices = flatten_sim.indices
-        self.f_sim_values = flatten_sim.values
-        # print("calulate sim_m done!")
-
-    def modify(self, threshold):
-        raise NotImplementedError
-
-
-class ProactiveEdges2:
-    def __init__(self, y, edges, device, normalization=False):
-        self.y = y.detach()
-        self.num_nodes = self.y.size(0)
-        self.edges = edges
-        self.normalization = normalization
-        self.device = device
-        self._cal_sim_m()  # get sim_m adj_bool_m adj_2_bool_m
-
-    def _cal_sim_m(self):
-        y = self.y
-        adj_m = get_adj_m(self.edges, self.y.size(0), dtype=torch.uint8)
-        self.adj_bool_m = adj_m > 0
-        # adj_m = adj_m.to(self.device, torch.float16)
-        # self.adj_2_bool_m = (torch.matmul(adj_m, adj_m) > 0).to("cpu")
-        del adj_m
-        norm = y.norm(p=2, dim=1)
-        y = (y.t() / norm).t()
-        if self.normalization:
-            self.y = y
-        self.sim_m = torch.matmul(y, y.t())
-
-        # print("pruning..")
-        row, col = self.edges
-        y_r, y_c = y[row], y[col]
-        self.dot_sim = torch.bmm(
-            y_r.view(y_r.size(0), 1, y_r.size(1)), y_c.view(y_c.size(0), y_c.size(1), 1)
-        ).view(self.edges.size(1))
-        # print("done")
-        # flatten_sim = self.sim_m.to("cpu").flatten().sort()
-        # self.f_sim_indices = flatten_sim.indices
-        # self.f_sim_values = flatten_sim.values
-        # print("calulate sim_m done!")
-
-    def modify(self, threshold):
-        raise NotImplementedError
-
-
-class EdgesDropper2(ProactiveEdges2):
-    def modify(self, threshold):
-        return self.edges[:, self.dot_sim >= threshold]
-
-
-class EdgesDropper(ProactiveEdges):
-    def modify(self, threshold, adj_m=None, last_deleted=0, last_added=0):
-        num_nodes = self.num_nodes
-        pre_selected = int(num_nodes * num_nodes * threshold)
-        edges_f = self.f_sim_indices[:pre_selected]
-        num_deleted = 0
-        num_added = 0
-        if adj_m is None:
-            adj_m = self.adj_bool_m.clone()
-            edges_f = self.f_sim_indices[:pre_selected]
-        else:
-            num_deleted = last_deleted
-            num_added = last_added
-            edges_f = self.f_sim_indices[
-                int(num_nodes * num_nodes * (threshold - 0.01)) : pre_selected
-            ]
-        for edge_f in edges_f:
-            row, col = edge_f // num_nodes, edge_f % num_nodes
-            if adj_m[row, col].item() or adj_m[col, row].item():
-                adj_m[row, col] = False
-                adj_m[col, row] = False
-                num_deleted += 2
-        print("pre_selected", pre_selected, "added", 0, "deleted", num_deleted, end=" ")
-        return num_deleted, num_added, adj_m
-
-
-class EdgesAdder(ProactiveEdges):
-    def modify(self, threshold, adj_m=None):
-        num_nodes = self.num_nodes
-        num_cand = self.f_sim_indices.size(0)
-        pre_selected = int(num_cand * threshold)
-        # edges_f = self.f_sim_indices[:pre_selected]
-        # adj_m = self.adj_bool_m.clone()
-
-        if adj_m is None:
-            adj_m = self.adj_bool_m.clone()
-            edges_f = self.f_sim_indices[:pre_selected]
-        else:
-            # num_deleted = last_deleted
-            # num_added = last_added
-            edges_f = self.f_sim_indices[
-                int(num_cand * (threshold - 0.01)) : pre_selected
-            ]
-        # num_deleted = 0
-        # num_added = 0
-        for edge_f in edges_f:
-            row, col = edge_f // num_nodes, edge_f % num_nodes
-            if not adj_m[row, col].item() or not adj_m[col, row].item():
-                adj_m[row, col] = True
-                adj_m[col, row] = True
-                # num_added += 2
-        # print("added", 0, "deleted", num_deleted, end=" ")
-        return adj_m
-
-
-# class EdgesModifier(ProactiveEdges):
-#     def modify(self, threshold):
-#         num_nodes = self.y.size(0)
-#         num_edges = self.edges.size(1)
-#         need_edges = num_edges
-
-#         pruned_edges = prune(self.edges, self.y, threshold)
-#         pruned_adj_bool_m = get_adj_m(pruned_edges, num_nodes, dtype=torch.bool)
-
-#         edges_flattened = self.sim_m.flatten().topk(need_edges + num_nodes).indices
-#         print(
-#             "modify", pruned_edges.size(1), need_edges - pruned_edges.size(1), end=" "
-#         )
-#         return _combine_edges_2(
-#             edges_flattened,
-#             pruned_adj_bool_m,
-#             self.adj_2_bool_m,
-#             num_nodes,
-#             need_edges - pruned_edges.size(1),
-#         )
-
-
-class OldEdgesModifier:
-    def __init__(self, y, edges, device, normalization=False):
-        self.y = y.detach()
-        self.edges = edges
-        self.normalization = normalization
-        self.device = device
-        self._cal_sim_m()  # get sim_m adj_bool_m adj_2_bool_m
-
-    def _cal_sim_m(self):
-        y = self.y
-        adj_m = get_adj_m(self.edges, self.y.size(0), dtype=torch.uint8)
-        self.adj_bool_m = adj_m > 0
-        adj_m = adj_m.to(self.device, torch.float16)
-        self.adj_2_bool_m = (torch.matmul(adj_m, adj_m) > 0).to("cpu")
-        del adj_m
-        norm = y.norm(p=2, dim=1)
-        y = (y.t() / norm).t()
-        if self.normalization:
-            self.y = y
-        self.sim_m = torch.matmul(y, y.t())
-        # print("calulate sim_m done!")
-
-    def modify(self, threshold):
-        num_nodes = self.y.size(0)
-        num_edges = self.edges.size(1)
-        need_edges = num_edges
-
-        pruned_edges = prune(self.edges, self.y, threshold)
-        pruned_adj_bool_m = get_adj_m(pruned_edges, num_nodes, dtype=torch.bool)
-
-        edges_flattened = self.sim_m.flatten().topk(need_edges + num_nodes).indices
-        print(
-            "modify", pruned_edges.size(1), need_edges - pruned_edges.size(1), end=" "
-        )
-        return _combine_edges_2(
-            edges_flattened,
-            pruned_adj_bool_m,
-            self.adj_2_bool_m,
-            num_nodes,
-            need_edges - pruned_edges.size(1),
-        )
-
-
-def get_adj_m(edge_index, num_nodes, dtype=torch.bool):
-    adj = torch.zeros((num_nodes, num_nodes), dtype=dtype)
-    row, col = edge_index
-    adj[row, col] = 1
-    adj[col, row] = 1
-    return adj
-
-
-# Mainly add the logic that it won't add the self-loop when adding.
-def _combine_edges_2(
-    edges_flattened, adj_bool, except_adj_bool_num_m, num_nodes, num_compensate_edges
-):
-    # edges = torch.zeros((2, edges_flattened.size(0)), dtype=torch.long)
-    # rows = [edge // num_nodes for edge in edges_flattened]
-    # cols = [edge % num_nodes for edge in edges_flattened]
-    p_c = 0
-    num_compensate_edges += num_compensate_edges % 2
-    adj_bool = adj_bool.clone()
-    for edge_f in edges_flattened:
-        if p_c == num_compensate_edges:
-            break
-        row, col = edge_f // num_nodes, edge_f % num_nodes
-        if row == col:
-            continue
-        if not (except_adj_bool_num_m[row, col].item() or adj_bool[row, col].item()):
-            adj_bool[row, col] = True
-            adj_bool[col, row] = True
-            p_c += 2
-
-    if p_c != num_compensate_edges:
-        print("!!!!! p_c != num_compensate_edges", p_c, num_compensate_edges, end=" ")
-    return adj_bool.nonzero().t()
-
 def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+    if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    elif v.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise argparse.ArgumentTypeError('Unsupported value encountered.')
+        raise argparse.ArgumentTypeError("Unsupported value encountered.")
 
+
+def soft_cross_entropy(predict, soft_target):
+    return -(soft_target * torch.log(predict)).sum(dim=1).mean()
