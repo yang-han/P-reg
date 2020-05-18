@@ -1,0 +1,66 @@
+{
+  "model": "GCN",
+  "cora":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 200,
+    "lr": 0.01,
+    "weight_decay": 5e-4,
+    "num_splits": 3,
+    "hidden_size": 64
+  },
+  "citeseer":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 200,
+    "lr": 0.01,
+    "weight_decay": 5e-4,
+    "num_splits": 3,
+    "hidden_size": 64
+  },
+  "pubmed":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 200,
+    "lr": 0.01,
+    "weight_decay": 5e-4,
+    "num_splits": 3,
+    "hidden_size": 64
+  },
+  "cs":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 20,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "num_splits": 3,
+    "hidden_size": 64
+  },
+  "physics":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 200,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "num_splits": 3,
+    "hidden_size": 64
+  },
+  "computers":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 200,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "num_splits": 3,
+    "hidden_size": 64
+  },
+  "photo":{
+    "epochs": 10000,
+    "num_seeds": 3,
+    "patience": 200,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "num_splits": 3,
+    "hidden_size": 64
+  }
+}

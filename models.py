@@ -7,9 +7,9 @@ from torch_geometric.nn.inits import glorot, zeros
 from conv import IConv
 
 class ADGCN(torch.nn.Module):
-    def __init__(self, num_features, num_classes, activate="iden"):
+    def __init__(self, num_features, num_classes, activate, hidden_channels):
         super(ADGCN, self).__init__()
-        self.m1 = GCN(num_features, num_classes)
+        self.m1 = GCN(num_features, num_classes, hidden_channels)
         self.conv = GCNConv(num_classes, num_classes, cached=True)
         # self.mu = nn.Parameter(torch.ones(1)* 0.2, requires_grad=False)
         if activate == "iden":
@@ -25,11 +25,29 @@ class ADGCN(torch.nn.Module):
         x = self.activate(self.m1(x, edge_index))
         return self.conv(x, edge_index)
 
+class ADGAT(torch.nn.Module):
+    def __init__(self, num_features, num_classes, activate, hidden_channels):
+        super(ADGAT, self).__init__()
+        self.m1 = GAT(num_features, num_classes, hidden_channels)
+        self.conv = GCNConv(num_classes, num_classes, cached=True)
+        # self.mu = nn.Parameter(torch.ones(1)* 0.2, requires_grad=False)
+        if activate == "iden":
+            self.activate = torch.nn.Identity(num_classes)
+        elif activate == "softmax":
+            self.activate = torch.nn.Softmax(dim=1)
+        elif activate == "relu":
+            self.activate = torch.nn.ReLU()
+        else:
+            print("activate error")
+
+    def forward(self, x, edge_index):
+        x = self.activate(self.m1(x, edge_index))
+        return self.conv(x, edge_index)
 
 class IADGCN(torch.nn.Module):
-    def __init__(self, num_features, num_classes):
+    def __init__(self, num_features, num_classes, hidden_channels):
         super(IADGCN, self).__init__()
-        self.m1 = GCN(num_features, num_classes)
+        self.m1 = GCN(num_features, num_classes, hidden_channels)
         self.conv = IConv(num_classes, num_classes, cached=True)
         # self.mu = nn.Parameter(torch.ones(1)* 0.2, requires_grad=False)
 
@@ -37,12 +55,22 @@ class IADGCN(torch.nn.Module):
         x = self.m1(x, edge_index)
         return self.conv(x, edge_index)
 
+class IADGAT(torch.nn.Module):
+    def __init__(self, num_features, num_classes, hidden_channels):
+        super(IADGAT, self).__init__()
+        self.m1 = GAT(num_features, num_classes, hidden_channels)
+        self.conv = IConv(num_classes, num_classes, cached=True)
+        # self.mu = nn.Parameter(torch.ones(1)* 0.2, requires_grad=False)
+
+    def forward(self, x, edge_index):
+        x = self.m1(x, edge_index)
+        return self.conv(x, edge_index)
 
 class GCN(torch.nn.Module):
-    def __init__(self, num_features, num_classes):
+    def __init__(self, num_features, num_classes, hidden_channels):
         super(GCN, self).__init__()
-        self.conv1 = GCNConv(num_features, 16, cached=True)
-        self.conv2 = GCNConv(16, num_classes, cached=True)
+        self.conv1 = GCNConv(num_features, hidden_channels, cached=True)
+        self.conv2 = GCNConv(hidden_channels, num_classes, cached=True)
 
     def forward(self, x, edge_index):
         x = F.relu(self.conv1(x, edge_index))
@@ -52,11 +80,11 @@ class GCN(torch.nn.Module):
 
 
 class GAT(torch.nn.Module):
-    def __init__(self, num_features, num_classes):
+    def __init__(self, num_features, num_classes, hidden_channels):
         super(GAT, self).__init__()
-        self.conv1 = GATConv(num_features, 8, heads=8, dropout=0.6)
+        self.conv1 = GATConv(num_features, hidden_channels, heads=8, dropout=0.6)
         # On the Pubmed dataset, use heads=8 in conv2.
-        self.conv2 = GATConv(8 * 8, num_classes, heads=1, concat=True, dropout=0.6)
+        self.conv2 = GATConv(8 * hidden_channels, num_classes, heads=1, concat=True, dropout=0.6)
 
     def forward(self, x, edge_index):
         x = F.dropout(x, p=0.6, training=self.training)
