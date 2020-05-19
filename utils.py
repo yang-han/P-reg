@@ -3,9 +3,11 @@ import json
 import os
 import pickle
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
+from scipy import stats
 from torch_geometric.datasets import Amazon, Coauthor, CoraFull, Planetoid
 
 ALL_DATASETS = [
@@ -150,3 +152,9 @@ def str2bool(v):
 
 def soft_cross_entropy(predict, soft_target):
     return -(soft_target * torch.log(predict)).sum(dim=1).mean()
+
+def t_test(mean1, std1, nobs1, mean2, std2, nobs2):
+    m_std1 = np.sqrt(nobs1 / (nobs1-1)) * std1
+    m_std2 = np.sqrt(nobs1 / (nobs1-1)) * std2
+    result = stats.ttest_ind_from_stats(mean1=mean1, std1=m_std1, nobs1=nobs1, mean2=mean2, std2=m_std2, nobs2=nobs2)
+    return result.pvalue
