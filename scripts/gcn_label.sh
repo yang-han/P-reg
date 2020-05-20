@@ -1,7 +1,7 @@
 datasets="cora citeseer pubmed cs physics computers photo"
 model="gcn"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}"  )" && pwd  )"
-RESULT_DIR=$DIR$"/../result/"$model
+RESULT_DIR=$DIR$"/../result/"$model$"_label"
 echo $RESULT_DIR
 
 if [ ! -d "$RESULT_DIR"  ]; then
@@ -10,9 +10,10 @@ fi
 
 path=$DIR$"/../config/"
 config_path=$path$model$".json"
-gpu=0
-
+gpu=1
+smoothings="0.0001 0.001 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99"
 for dataset in ${datasets}; do
+  for smoothing in ${smoothings}; do
     lr=$(jq .$dataset.lr $config_path)
     weight_decay=$(jq .$dataset.weight_decay $config_path)
     patience=$(jq .$dataset.patience $config_path)
@@ -21,9 +22,10 @@ for dataset in ${datasets}; do
     epochs=$(jq .$dataset.epochs $config_path)
     hidden_size=$(jq .$dataset.hidden_size $config_path)
     echo "running $dataset"
-    python ../main_vanilla.py --dataset $dataset --model $model --gpu $gpu \
+    python ../main_label.py --dataset $dataset --model $model --gpu $gpu \
       --epochs $epochs --num_seeds $num_seeds --num_splits $num_splits --patience $patience \
-      --hidden_size $hidden_size --lr $lr --weight_decay $weight_decay
+      --hidden_size $hidden_size --lr $lr --weight_decay $weight_decay --regularizer $smoothing
+  done
 done
 #path=$DIR$"/../config/"
 #config_path=$path$model$".json"
