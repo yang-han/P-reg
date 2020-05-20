@@ -27,7 +27,7 @@ kl_div=args.kl_div
 lr=args.lr
 weight_decay=args.weight_decay
 patience=args.patience
-model = 'ADGCN'
+model = args.model
 dataset = args.dataset
 activate = args.activate
 
