@@ -14,30 +14,12 @@ from models import GCN, GAT, SGC
 #path_json = "~/gnn/ADGCN/config"
 path_json=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config')
 
-class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes, smoothing=0.0, dim=-1):
-        super(LabelSmoothingLoss, self).__init__()
-        self.confidence = 1.0 - smoothing
-        self.smoothing = smoothing
-        self.cls = classes
-        self.dim = dim
-
-    def forward(self, pred, target):
-        # target is a scalar
-        pred = pred.log_softmax(dim=self.dim)
-        with torch.no_grad():
-            # true_dist = pred.data.clone()
-            true_dist = torch.zeros_like(pred)
-            true_dist.fill_(self.smoothing / (self.cls - 1))
-            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
-        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
 def create_parser():
     parser = argparse.ArgumentParser(description="train many times.")
     parser.add_argument("--dataset", type=str, default="citeseer")
     parser.add_argument("--model", type=str, default="GCN")
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--regularizer", type=float, default=0.)
     parser.add_argument("--epochs", type=int, default=10000)
     parser.add_argument("--num_seeds", type=int, default=3)
     parser.add_argument("--num_splits", type=int, default=3)
@@ -48,25 +30,24 @@ def create_parser():
     parser.add_argument("--verbose", "-v", action="store_true")
     return parser
 
-def loss_(model, data, mask, reg_loss_):
+def loss_(model, data, mask):
     logit = model(data.x, data.edge_index)
-    #loss = F.nll_loss(torch.log_softmax(logit[mask], dim=-1), data.y[mask])
-    reg_loss = reg_loss_(logit[mask], data.y[mask])
-    return reg_loss
+    loss = F.nll_loss(torch.log_softmax(logit[mask], dim=-1), data.y[mask])
+    return loss
 
-def train(model, optimizer, data, splits, reg_loss_):
+def train(model, optimizer, data, splits):
     train_mask = splits[0].to(data.x.device)
     model.train()
     optimizer.zero_grad()
-    loss = loss_(model, data, train_mask, reg_loss_)
+    loss = loss_(model, data, train_mask)
 
     loss.backward()
     optimizer.step()
 
-def val_loss_fn(model, data, splits, reg_loss_):
+def val_loss_fn(model, data, splits):
     model.eval()
     val_mask = splits[1].to(data.x.device)
-    val_loss = loss_(model, data, val_mask, reg_loss_)
+    val_loss = loss_(model, data, val_mask)
     return val_loss
 
 def test(model, data, splits):
@@ -105,8 +86,6 @@ def run():
 
     result = np.zeros((4, num_seeds, num_splits))
 
-    assert 0. <= args.regularizer < 1.
-    reg_loss_ = LabelSmoothingLoss(dataset.num_classes, smoothing=args.regularizer)
 
     path_split = "/home/han/.datasets/splits"
 
@@ -128,13 +107,13 @@ def run():
 
             for epoch in range(epochs):
 
-                train(model, optimizer, data, splits, reg_loss_)
+                train(model, optimizer, data, splits)
                 train_acc, val_acc, tmp_test_acc = test(
                     model, data, splits
                 )
 
                 # cal val_loss
-                val_loss = val_loss_fn(model, data, splits, reg_loss_)
+                val_loss = val_loss_fn(model, data, splits)
 
                 if val_acc > best_val_acc:
                 #if val_loss < best_val_loss:
@@ -146,9 +125,8 @@ def run():
                 else:
                     cnt_wait += 1
 
-                log = "Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}, Val_loss: {: .4f}"
-                if args.verbose:
-                    print(log.format(epoch + 1, train_acc, best_val_acc, test_acc, val_loss))
+                #if args.verbose:
+                #    print(log.format(epoch + 1, train_acc, best_val_acc, test_acc, val_loss))
 
                 if cnt_wait > patience:
                     break
@@ -159,16 +137,21 @@ def run():
             result[3][seed][split] = best_val_epoch
 
 
+    symbol = "\u00b1"
+    log = "Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}, Val_loss: {: .4f}{}{: .2f}"
     path=os.path.join(os.path.dirname(os.path.abspath(__file__)))
     if args.verbose:
         data_avr = np.mean(result, axis=(1,2))
-        log = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
-        print(log.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
+        data_var = np.var(result, axis=(1,2))
+        log = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.2f}{}{:.2f}"
+        print(log.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]*100, symbol, data_var[2]*10000))
+        data_avr_splits = np.mean(result, axis=(1))
+        print(data_avr_splits[2])
     else:
         data_avr = np.mean(result, axis=(1,2))
         log = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
         print(log.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
-        para = str(lr)+'_'+str(weight_decay)+'_'+str(patience)+'_'+str(args.regularizer)
+        para = str(lr)+'_'+str(weight_decay)+'_'+str(patience)
         outfile = args.dataset+'_'+para+'.npy'
         with open(os.path.join(path, "result", args.model.lower(), outfile), 'wb') as f:
             np.save(f, result)
