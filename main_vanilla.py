@@ -9,7 +9,7 @@ import torch_geometric.transforms as T
 import torch.nn.functional as F
 import torch.nn as nn
 
-from models import GCN, GAT, SGC
+from models import GCN, GAT, SGC, SAGE
 
 #path_json = "~/gnn/ADGCN/config"
 path_json=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config')
@@ -151,7 +151,7 @@ def run():
         data_avr = np.mean(result, axis=(1,2))
         log = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
         print(log.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
-        para = str(lr)+'_'+str(weight_decay)+'_'+str(patience)
+        para = str(lr)+'_'+str(weight_decay)+'_'+str(patience)+"_"+str(hidden_size)
         outfile = args.dataset+'_'+para+'.npy'
         with open(os.path.join(path, "result", args.model.lower(), outfile), 'wb') as f:
             np.save(f, result)
