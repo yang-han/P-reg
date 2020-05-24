@@ -10,7 +10,7 @@ import torch
 import torch_geometric.transforms as T
 import torch.nn.functional as F
 
-from models import IADGCN, IADGAT
+from models import IADGCN, IADGAT, IADSAGE, IADMLP
 
 def create_parser():
     parser = argparse.ArgumentParser(description="train many times.")
@@ -26,31 +26,45 @@ def create_parser():
     parser.add_argument("--num_splits", type=int, default=10)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--hidden_size", type=int, default=64)
+    parser.add_argument("--kl_div", type=int, default=1)
     return parser
 
-def adloss(model, data, mask, mu):
-    output_1 = model.m1(data.x, data.edge_index)
-    loss_1 = F.nll_loss(torch.log_softmax(output_1[mask], dim=1), data.y[mask])
+def adloss(model, data, mask, mu, kl_div=1):
+    output_1 = F.softmax(model.m1(data.x, data.edge_index), dim=1)
+    loss_1 = F.nll_loss(torch.log(output_1[mask]), data.y[mask])
 
-    loss_2 = torch.norm(
-        model(data.x, data.edge_index)-output_1, p=2, dim=1
-    ).mean()
+    if kl_div == 1:
+        # kl_div(x, y)=y_n*(log y_n - x_n)
+        loss_2 = F.kl_div(
+            torch.log(output_1), F.softmax(model(data.x, data.edge_index), dim=1)
+        )
+    else:
+        loss_2 = F.kl_div(
+            F.log_softmax(model(data.x, data.edge_index), dim=1), output_1
+        )
+        #loss_2 = soft_cross_entropy(
+        #    F.softmax(model(data.x, data.edge_index), dim=1), output_1
+        #)
+    #loss_2 = soft_cross_entropy(
+    #    F.softmax(model(data.x, data.edge_index), dim=1), output_1
+    #)
     loss = loss_1 + mu * loss_2
+
     return loss
 
 
-def train(model, optimizer, data, splits, mu):
+def train(model, optimizer, data, splits, mu, kl_div):
     train_mask = splits[0].to(data.x.device)
     model.train()
     optimizer.zero_grad()
-    loss = adloss(model, data, train_mask, mu)
+    loss = adloss(model, data, train_mask, mu, kl_div)
     loss.backward()
     optimizer.step()
 
 def val_loss_fn(model, data, splits, mu):
     model.eval()
     val_mask = splits[1].to(data.x.device)
-    val_loss = adloss(model, data, val_mask, mu)
+    val_loss = adloss(model, data, val_mask, mu, kl_div)
     return val_loss
 
 def test(model, data, splits):
@@ -92,6 +106,8 @@ def run():
     device = args.gpu
     num_splits = args.num_splits
     hidden_size = args.hidden_size
+    kl_div = args.kl_div
+    print(args)
 
     model_cls = globals()[args.model.upper()]
 
@@ -100,7 +116,7 @@ def run():
     dataset = load_dataset(args.dataset, T.NormalizeFeatures())
     data = dataset[0]
 
-    result = np.zeros((4, num_seeds, num_splits))
+    result = np.zeros((2, 4, num_seeds, num_splits))
 
     path_split = "/home/han/.datasets/splits"
 
@@ -110,7 +126,7 @@ def run():
         # In each split, run seeds times
         for seed in seeds:
             torch.manual_seed(seed)
-            if args.model.upper() in ["IADGCN", "IADGAT"]:
+            if args.model.upper() in ["IADGCN", "IADGAT", "IADSAGE", "IADMLP"]:
                 model = model_cls(dataset.num_features, dataset.num_classes, hidden_size).to(device)
             else:
                 raise NotImplementedError("model selection error")
@@ -127,7 +143,7 @@ def run():
 
             for epoch in range(epochs):
 
-                train(model, optimizer, data, splits, mu)
+                train(model, optimizer, data, splits, mu,kl_div)
                 train_acc, val_acc, tmp_test_acc = test(
                     model, data, splits
                 )
@@ -155,23 +171,31 @@ def run():
                 if cnt_wait > patience:
                     break
 
-            result[0][seed][split] = train_acc_best_val_2
-            result[1][seed][split] = best_val_acc_2
-            result[2][seed][split] = test_acc_2
-            result[3][seed][split] = best_val_epoch_2
+            result[0][0][seed][split] = train_acc_best_val
+            result[0][1][seed][split] = best_val_acc
+            result[0][2][seed][split] = test_acc
+            result[0][3][seed][split] = best_val_epoch
+            result[1][0][seed][split] = train_acc_best_val_2
+            result[1][1][seed][split] = best_val_acc_2
+            result[1][2][seed][split] = test_acc_2
+            result[1][3][seed][split] = best_val_epoch_2
 
     path=os.path.join(os.path.dirname(os.path.abspath(__file__)))
     if args.verbose:
-        data_avr = np.mean(result, axis=(1,2))
+        data_avr = np.mean(result, axis=(2,3))
+        log1 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
         log2 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(intermediate layer)"
-        print(log2.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
+        print(log1.format(dataset, int(data_avr[0][3]), data_avr[0][0], data_avr[0][1], data_avr[0][2]))
+        print(log2.format(dataset, int(data_avr[1][3]), data_avr[1][0], data_avr[1][1], data_avr[1][2]))
     else:
-        data_avr = np.mean(result, axis=(1,2))
+        data_avr = np.mean(result, axis=(2,3))
+        log1 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(final layer)"
         log2 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(intermediate layer)"
-        print(log2.format(dataset, int(data_avr[3]), data_avr[0], data_avr[1], data_avr[2]))
-        para = str(mu)+'_'+str(lr)+'_'+str(weight_decay)+'_'+str(patience)
+        print(log1.format(dataset, int(data_avr[0][3]), data_avr[0][0], data_avr[0][1], data_avr[0][2]))
+        print(log2.format(dataset, int(data_avr[1][3]), data_avr[1][0], data_avr[1][1], data_avr[1][2]))
+        para = str(mu)+'_'+str(lr)+'_'+str(weight_decay)+'_'+str(patience)+"_"+str(hidden_size)+"_"+str(kl_div)
         outfile = args.dataset+'_'+para+'.npy'
-        with open(os.path.join(path, "result", args.model.lower(), outfile), 'wb') as f:
+        with open(os.path.join(path, "result", args.model.lower()+"_kl", outfile), 'wb') as f:
             np.save(f, result)
 
 

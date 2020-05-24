@@ -24,7 +24,7 @@ for activate in ${activate_set}; do
   for mu in ${mus}; do
     name=${mu}_${kl_div}_${lr}_${weight_decay}_${patience}_${activate}
     echo $name
-    python ../../main.py --num_seeds $num_seeds --num_splits $num_splits --model $model --dataset $dataset --lr $lr --weight_decay $weight_decay --mu $mu --kl_div $kl_div --patience $patience --activate $activate --epochs $epochs --gpu $gpu
+    python ../../main.py --num_seeds $num_seeds --num_splits $num_splits --model $model --dataset $dataset --lr $lr --weight_decay $weight_decay --mu $mu --kl_div $kl_div --patience $patience --activate $activate --epochs $epochs --gpu $gpu --hidden_size $hidden_size
 
 done
 done

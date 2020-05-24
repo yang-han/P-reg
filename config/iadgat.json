@@ -1,5 +1,5 @@
 {
-  "model": "GAT",
+  "model": "IADGAT",
   "cora":{
     "epochs": 10000,
     "num_seeds": 5,

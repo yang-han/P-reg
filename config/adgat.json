@@ -7,7 +7,7 @@
     "lr": 0.01,
     "weight_decay": 5e-4,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   },
   "citeseer":{
     "epochs": 10000,
@@ -16,7 +16,7 @@
     "lr": 0.01,
     "weight_decay": 5e-4,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   },
   "pubmed":{
     "epochs": 10000,
@@ -25,16 +25,16 @@
     "lr": 0.01,
     "weight_decay": 5e-4,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   },
   "cs":{
     "epochs": 10000,
     "num_seeds": 5,
-    "patience": 20,
+    "patience": 200,
     "lr": 0.01,
     "weight_decay": 0.0,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   },
   "physics":{
     "epochs": 10000,
@@ -43,7 +43,7 @@
     "lr": 0.01,
     "weight_decay": 0.0,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   },
   "computers":{
     "epochs": 10000,
@@ -52,7 +52,7 @@
     "lr": 0.01,
     "weight_decay": 0.0,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   },
   "photo":{
     "epochs": 10000,
@@ -61,6 +61,6 @@
     "lr": 0.01,
     "weight_decay": 0.0,
     "num_splits": 5,
-    "hidden_size": 8
+    "hidden_size": 16
   }
 }

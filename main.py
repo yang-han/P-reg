@@ -10,7 +10,7 @@ import torch
 import torch_geometric.transforms as T
 import torch.nn.functional as F
 
-from models import ADGCN, ADGAT
+from models import ADGCN, ADGAT, ADSAGE, IADSAGE
 
 def create_parser():
     parser = argparse.ArgumentParser(description="train many times.")
@@ -120,7 +120,7 @@ def run():
         # In each split, run seeds times
         for seed in seeds:
             torch.manual_seed(seed)
-            if args.model.upper() in ["ADGCN", "ADGAT"]:
+            if args.model.upper() in ["ADGCN", "ADGAT", "ADSAGE"]:
                 model = model_cls(dataset.num_features, dataset.num_classes, activate, hidden_size).to(device)
             else:
                 raise NotImplementedError("model selection error")
@@ -190,7 +190,7 @@ def run():
         log2 = "Dataset: {}, Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}.(intermediate layer)"
         print(log1.format(dataset, int(data_avr[0][3]), data_avr[0][0], data_avr[0][1], data_avr[0][2]))
         print(log2.format(dataset, int(data_avr[1][3]), data_avr[1][0], data_avr[1][1], data_avr[1][2]))
-        para = str(mu)+'_'+str(kl_div)+'_'+str(lr)+'_'+str(weight_decay)+'_'+str(patience)+"_"+activate
+        para = str(mu)+'_'+str(kl_div)+'_'+str(lr)+'_'+str(weight_decay)+'_'+str(patience)+"_"+str(hidden_size)
         outfile = args.dataset+'_'+para+'.npy'
         with open(os.path.join(path, "result", args.model.lower(), outfile), 'wb') as f:
             np.save(f, result)
