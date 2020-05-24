@@ -5,7 +5,7 @@ from torch_geometric.nn import GATConv, GCNConv, SGConv
 from sage_conv import SAGEConv
 from torch_geometric.nn.inits import glorot, zeros
 
-from conv import IConv
+from conv import IConv, NIConv
 
 class ADGCN(torch.nn.Module):
     def __init__(self, num_features, num_classes, activate, hidden_channels):
@@ -62,6 +62,17 @@ class ADSAGE(torch.nn.Module):
 
     def forward(self, x, edge_index):
         x = self.activate(self.m1(x, edge_index))
+        return self.conv(x, edge_index)
+
+class NIADGCN(torch.nn.Module):
+    def __init__(self, num_features, num_classes, hidden_channels):
+        super(NIADGCN, self).__init__()
+        self.m1 = GCN(num_features, num_classes, hidden_channels)
+        self.conv = NIConv(num_classes, num_classes, cached=True)
+        # self.mu = nn.Parameter(torch.ones(1)* 0.2, requires_grad=False)
+
+    def forward(self, x, edge_index):
+        x = self.m1(x, edge_index)
         return self.conv(x, edge_index)
 
 class IADGCN(torch.nn.Module):
