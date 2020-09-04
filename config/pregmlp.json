@@ -1,0 +1,31 @@
+{
+  "model": "PREGMLP",
+  "cora":{
+    "weight_decay": 5e-4,
+    "mu": 0.1
+  },
+  "citeseer":{
+    "weight_decay": 5e-4,
+    "mu": 0.1
+  },
+  "pubmed":{
+    "weight_decay": 5e-4,
+    "mu": 0.2
+  },
+  "cs":{
+    "weight_decay": 0.0,
+    "mu": 0.1
+  },
+  "physics":{
+    "weight_decay": 0.0,
+    "mu": 0.001
+  },
+  "computers":{
+    "weight_decay": 0.0,
+    "mu": 0.1
+  },
+  "photo":{
+    "weight_decay": 0.0,
+    "mu": 0.15
+  }
+}
