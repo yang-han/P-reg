@@ -1,6 +1,6 @@
 # Rethinking Regularization for Graph Neural Networks
 
-This is the source code to reproduce the experimental results for *Rethinking Regularization for Graph Neural Networks*.
+This is the source code to reproduce the experimental results for *[Rethinking Graph Regularization for Graph Neural Networks](https://arxiv.org/abs/2009.02027)*.
 
 The code for graph-level experiments is in the `./graph_level/` sub-folder.
 
@@ -121,18 +121,13 @@ python main.py --num_splits 1 --num_seeds 10 --dataset pubmed --model preggcn --
 8. The code of other state-of-the-art methods is either from their corresponding official repository or pytoch-geometric benchmarking code. Details are attached below.
 9. The code for graph-level experiments is in the `./graph_level/` folder.
 
-## Other state-of-the-art methods
+## Citation
 
-The code of other state-of-the-art methods is either from their corresponding official repository or [pytoch-geometric code](https://github.com/rusty1s/pytorch_geometric) at <https://github.com/rusty1s/pytorch_geometric>.
-
-- APPNP <https://github.com/rusty1s/pytorch_geometric/blob/master/benchmark/citation/appnp.py>
-
-- GMNN <https://github.com/DeepGraphLearning/GMNN>
-
-- Graph U-Nets <https://github.com/rusty1s/pytorch_geometric/blob/master/examples/graph_unet.py>
-
-- GraphAT <https://github.com/fulifeng/GraphAT>
-
-- BVAT <https://github.com/thudzj/bvat>
-
-- GraphMix <https://github.com/vikasverma1077/GraphMix>
+```BibTex
+@article{yang2020rethinking,
+    title={Rethinking Graph Regularization For Graph Neural Networks},
+    author={Han Yang and Kaili Ma and James Cheng},
+    journal={arXiv preprint arXiv:2009.02027},
+    year={2020}
+}
+```
