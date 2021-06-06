@@ -1,4 +1,4 @@
-# Rethinking Regularization for Graph Neural Networks
+# [AAAI2021] Rethinking Regularization for Graph Neural Networks
 
 This is the source code to reproduce the experimental results for *[Rethinking Graph Regularization for Graph Neural Networks](https://arxiv.org/abs/2009.02027)*.
 
@@ -124,10 +124,12 @@ python main.py --num_splits 1 --num_seeds 10 --dataset pubmed --model preggcn --
 ## Citation
 
 ```BibTex
-@article{yang2020rethinking,
-    title={Rethinking Graph Regularization For Graph Neural Networks},
-    author={Han Yang and Kaili Ma and James Cheng},
-    journal={arXiv preprint arXiv:2009.02027},
-    year={2020}
+@inproceedings{yang2021rethinking,
+  author    = {Han Yang and Kaili Ma and James Cheng},
+  title     = {Rethinking Graph Regularization for Graph Neural Networks},
+  booktitle = {Thirty-Fifth {AAAI} Conference on Artificial Intelligence, {AAAI}
+               2021, Virtual Event, February 2-9, 2021},
+  pages     = {4573--4581},
+  year      = {2021}
 }
 ```
